@@ -93,7 +93,6 @@ func (h *UpWebhookHandler) authenticate(body []byte, authenticitySignature strin
 	}
 
 	mac := hmac.New(sha256.New, h.secretKey)
-	fmt.Printf("after sec: %v\n", mac.Sum(nil))
 	mac.Write(body)
 	expected := mac.Sum(nil)
 	return hmac.Equal(expected, sigHex)
