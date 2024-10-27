@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/alex-kennedy/up-bank-exporter/up"
 )
@@ -14,7 +15,7 @@ import (
 var (
 	port                 = flag.Int("port", 3000, "Port to serve /metrics HTTP handler.")
 	upBearerTokenPath    = flag.String("up_bank_bearer_token_path", "/up/token.key", "Path to the Up API bearer token to use with the API. See https://developer.up.com.au/#authentication.")
-	webhookSecretKeyPath = flag.String("up_bank_webhook_secret_key_path", "/up/webhook_secret.key", "Path to an Up webhook secret key for authenticating received webhook requests. See https://developer.up.com.au/#callback_post_webhookURL.")
+	webhookSecretKeyPath = flag.String("up_bank_webhook_secret_key_path", "", "Path to an Up webhook secret key for authenticating received webhook requests. See https://developer.up.com.au/#callback_post_webhookURL.")
 )
 
 func registerWebhookHandler() error {
@@ -36,7 +37,7 @@ func main() {
 		log.Fatalf("failed to read up bearer token path at %s: %v", *upBearerTokenPath, err)
 	}
 
-	handler, err := up.NewMetricsHandler(string(upBearerToken))
+	handler, err := up.NewMetricsHandler(strings.TrimSpace(string(upBearerToken)))
 	if err != nil {
 		log.Fatalf("NewMetricsHandler() failed: %v", err)
 	}

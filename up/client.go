@@ -71,6 +71,9 @@ func (u *UpMetricsClient) UpdateAccountsMetrics(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if accountsResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("GetAccountsWithResponse failed: %s", accountsResp.Status())
+	}
 	accounts = append(accounts, accountsResp.JSON200.Data...)
 	for accountsResp.JSON200.Links.Next != nil {
 		accountsResp, err = u.client.GetAccountsWithResponse(ctx, nil, func(_ context.Context, req *http.Request) error {
@@ -78,6 +81,9 @@ func (u *UpMetricsClient) UpdateAccountsMetrics(ctx context.Context) error {
 		})
 		if err != nil {
 			return err
+		}
+		if accountsResp.StatusCode() != http.StatusOK {
+			return fmt.Errorf("GetWebhooksWithResponse failed: %s", accountsResp.Status())
 		}
 		accounts = append(accounts, accountsResp.JSON200.Data...)
 	}
@@ -103,6 +109,9 @@ func (u *UpMetricsClient) UpdateWebhookMetrics(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if webhooksResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("GetWebhooksWithResponse failed: %s", webhooksResp.Status())
+	}
 	webhooks = append(webhooks, webhooksResp.JSON200.Data...)
 	for webhooksResp.JSON200.Links.Next != nil {
 		webhooksResp, err = u.client.GetWebhooksWithResponse(ctx, nil, func(_ context.Context, req *http.Request) error {
@@ -110,6 +119,9 @@ func (u *UpMetricsClient) UpdateWebhookMetrics(ctx context.Context) error {
 		})
 		if err != nil {
 			return err
+		}
+		if webhooksResp.StatusCode() != http.StatusOK {
+			return fmt.Errorf("GetWebhooksWithResponse failed: %s", webhooksResp.Status())
 		}
 		webhooks = append(webhooks, webhooksResp.JSON200.Data...)
 	}

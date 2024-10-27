@@ -105,6 +105,9 @@ func (h *UpWebhookHandler) handleTransaction(ctx context.Context, id string) err
 	if err != nil {
 		return err
 	}
+	if t.StatusCode() != http.StatusOK {
+		return fmt.Errorf("GetTransactionsIdWithResponse failed: %s", t.Status())
+	}
 
 	accountID := t.JSON200.Data.Relationships.Account.Data.Id
 	status := fmt.Sprintf("%s", t.JSON200.Data.Attributes.Status)

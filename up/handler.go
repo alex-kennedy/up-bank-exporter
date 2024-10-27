@@ -1,7 +1,7 @@
 package up
 
 import (
-	"io"
+	"log"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -22,9 +22,7 @@ type metricsHandler struct {
 
 func (h *metricsHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if err := h.c.UpdateMetrics(req.Context()); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		io.WriteString(w, err.Error())
-		return
+		log.Printf("failed to update metrics: %v", err)
 	}
 	h.p.ServeHTTP(w, req)
 }
