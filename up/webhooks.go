@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
@@ -22,7 +21,7 @@ var (
 	webhookRequests = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "up_bank_webhook_requests",
 		Help: "Up bank webhook requests with full information labels",
-	}, []string{"webhook_id", "event_type"})
+	}, []string{"webhook_id", "event_type", "status"})
 	webhookInflights = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "up_bank_webhook_incoming_inflights",
 		Help: "Number of inflight incoming webhook requests",
@@ -56,46 +55,53 @@ func (h *UpWebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "failed to read request body", http.StatusBadRequest)
-		return
-	}
-
-	authenticitySignature, err := hex.DecodeString(r.Header.Get(upAuthenticityHeader))
-	if err != nil || len(authenticitySignature) == 0 {
-		http.Error(w, fmt.Sprintf("%s header missing or invalid", upAuthenticityHeader), http.StatusUnauthorized)
-		return
-	}
-
-	if !h.authenticate(body, authenticitySignature) {
-		http.Error(w, "signature verification failed", http.StatusUnauthorized)
+		webhookRequests.With(prometheus.Labels{"webhook_id": "", "event_type": "", "status": fmt.Sprintf("%d", http.StatusBadRequest)}).Inc()
 		return
 	}
 
 	data := &WebhookEventCallback{}
 	if err := json.Unmarshal(body, data); err != nil {
 		http.Error(w, fmt.Sprintf("failed to unmarshal request body: %v", err), http.StatusBadRequest)
+		webhookRequests.With(prometheus.Labels{"webhook_id": "", "event_type": "", "status": fmt.Sprintf("%d", http.StatusBadRequest)}).Inc()
+		return
 	}
 
-	h.handleWebhookRequest(ctx, &data.Data)
+	webhookID := data.Data.Relationships.Webhook.Data.Id
+	eventType := fmt.Sprintf("%s", data.Data.Attributes.EventType)
+
+	if !h.authenticate(body, r.Header.Get(upAuthenticityHeader)) {
+		http.Error(w, "signature verification failed", http.StatusUnauthorized)
+		webhookRequests.With(prometheus.Labels{"webhook_id": webhookID, "event_type": eventType, "status": fmt.Sprintf("%d", http.StatusUnauthorized)}).Inc()
+		return
+	}
+
+	if err := h.handleWebhookRequest(ctx, &data.Data); err != nil {
+		http.Error(w, fmt.Sprintf("%v", err), http.StatusInternalServerError)
+		webhookRequests.With(prometheus.Labels{"webhook_id": webhookID, "event_type": eventType, "status": fmt.Sprintf("%d", http.StatusInternalServerError)}).Inc()
+		return
+	}
+	webhookRequests.With(prometheus.Labels{"webhook_id": webhookID, "event_type": eventType, "status": fmt.Sprintf("%d", http.StatusOK)}).Inc()
 }
 
-func (h *UpWebhookHandler) authenticate(body []byte, authenticitySignature []byte) bool {
-	mac := hmac.New(sha256.New, h.secretKey)
-	if _, err := mac.Write(body); err != nil {
-		// hash.Hash docs say this never returns an error.
-		log.Printf("hash.Hash.Writer returned an unexpected error: %v\n", err)
+func (h *UpWebhookHandler) authenticate(body []byte, authenticitySignature string) bool {
+	if authenticitySignature == "" {
 		return false
 	}
+	sigHex, err := hex.DecodeString(authenticitySignature)
+	if err != nil {
+		return false
+	}
+
+	mac := hmac.New(sha256.New, h.secretKey)
+	fmt.Printf("after sec: %v\n", mac.Sum(nil))
+	mac.Write(body)
 	expected := mac.Sum(nil)
-	return hmac.Equal(expected, []byte(authenticitySignature))
+	return hmac.Equal(expected, sigHex)
 }
 
 func (h *UpWebhookHandler) handleWebhookRequest(ctx context.Context, r *WebhookEventResource) error {
-	eventType := fmt.Sprintf("%s", r.Attributes.EventType)
-	webhookID := r.Relationships.Webhook.Data.Id
-	webhookRequests.With(prometheus.Labels{"event_type": eventType, "webhook_id": webhookID})
-
 	if t := r.Relationships.Transaction; t != nil {
-		return h.handleTransaction(ctx, t.Data.Id)
+		h.handleTransaction(ctx, t.Data.Id)
 	}
 	return nil
 }

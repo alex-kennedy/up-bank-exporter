@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -18,17 +19,9 @@ var (
 	webhookSecretKeyPath = flag.String("up_bank_webhook_secret_key_path", "", "Path to an Up webhook secret key for authenticating received webhook requests. See https://developer.up.com.au/#callback_post_webhookURL.")
 )
 
-func registerWebhookHandler() error {
-	upWebhookSecretKey, err := os.ReadFile(*webhookSecretKeyPath)
-	if err != nil {
-		log.Fatalf("failed to read webhook secret key at %s: %v", *webhookSecretKeyPath, err)
-	}
-	handler := up.NewUpWebhookHandler(upWebhookSecretKey)
-	http.Handle("/webhook", handler)
-	return nil
-}
-
 func main() {
+	flag.Parse()
+
 	if *upBearerTokenPath == "" {
 		log.Fatalf("--up_bank_bearer_token_path is required but not set")
 	}
@@ -56,4 +49,15 @@ func main() {
 	} else {
 		log.Fatalln(err)
 	}
+}
+
+func registerWebhookHandler() error {
+	key, err := os.ReadFile(*webhookSecretKeyPath)
+	if err != nil {
+		log.Fatalf("failed to read webhook secret key: %v", err)
+	}
+	key = bytes.TrimSpace(key)
+	handler := up.NewUpWebhookHandler(key)
+	http.Handle("/webhook", handler)
+	return nil
 }
